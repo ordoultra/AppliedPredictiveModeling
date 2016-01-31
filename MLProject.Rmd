@@ -1,0 +1,111 @@
+---
+title: "MLProject.Rmd"
+output: html_document
+---
+
+The strategy to build these models where to identify zero variance columns and remove them from the initial Test and Training data sets.  However after initial models were built, accuracy on prediction was not desirable therefore varImp() was evaluated for gbm.  It was determined "X" was responsible for 100% of the prediction, which was obviously incorrect.  Upon further inspection X was only a consecutive index variable, therefore X was removed from the Test and Training data sets.  Final model accuracy for both gradient boosted machine and random forest models were greater than 99% accuracy.
+
+```{r}
+library(caret)
+library(doMC)
+```
+
+```{r}
+library(caret)
+library(doMC)
+```
+
+<p>Register cores for multithreaded model building.</p>
+```{r}
+registerDoMC(cores = 16)
+```
+
+<p>Set see for reproducible results.</P>
+```{r}
+set.seed(555)
+```
+
+
+# Read in data
+```{r}
+Test <- read.csv("pml-testing.csv")
+D <- read.csv("pml-training.csv")
+```
+
+<p>If column in Test set is all NA, remove from Test and Training(D) data frames.</p>
+```{r}
+Test.missing <- sapply(Test, function(x) all(is.na(x)) )
+Test <- Test[!Test.missing]
+D <- D[!Test.missing]
+```
+
+<p>Remove variable X from Test and Training(D) datasets </p>
+```{r}
+D <- D[ , -which(names(D) %in% c("X")) ]
+Test <- Test[ , -which(names(Test) %in% c("X")) ]
+```
+
+<p>Create stratified random sample.</p>
+```{r}
+inTraining <- createDataPartition(D$classe, p = .80, list = FALSE)
+D.Train <- D[ inTraining, ]
+D.Test  <- D[-inTraining, ]
+```
+
+<p>5-fold Cross Validation repeated 3 times.</p>
+```{r}
+fitControl <- trainControl(
+  method = "repeatedcv",
+  number = 5,
+  repeats = 3)
+```
+
+<p>Train gradient boosted machine model using 5 fold x3 cross validation.</p>
+```{r}
+gbmFit1 <- train(classe ~ ., data = as.data.frame(D.Train),
+                 method = "gbm",
+                 trControl = fitControl,
+                 verbose = TRUE)
+
+gbmFit1
+```
+
+<p>Gradient Boosted Machine Model Accuracy</p>
+```{r} fig.width=7, fig.height=6
+plot(gbmFit1)
+```
+
+<p>Train random forest model using 5 fold x3 cross validation.</p>
+```{r}
+rfFit1 <- train(classe ~ ., data = as.data.frame(D.Train),
+                method = "rf",
+                trControl = fitControl,
+                verbose = TRUE)
+
+rfFit1
+```
+
+<p>Random Forest Model Accuracy</p>
+```{r} fig.width=7, fig.height=6
+plot(rfFit1)
+```
+
+
+<p>Make predictions using each gbm and rf models.</p>
+```{r}
+gbm.predict <- predict(gbmFit1, newdata = D.Test)
+rf.predict <- predict(rfFit1, newdata = D.Test)
+```
+
+<p>Build confusion matrices from models.</p>
+```{r}
+gbm.cm <- confusionMatrix(gbm.predict, D.Test$classe)
+rf.cm <- confusionMatrix(rf.predict, D.Test$classe)
+```
+
+<p>Evaluate accuracy for each model extracted from confusion matrices.</p>
+```{r}
+gbm.cm$overall['Accuracy']
+rf.cm$overall['Accuracy']
+```
+
