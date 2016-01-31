@@ -1,0 +1,289 @@
+<html>
+
+<head>
+<style type="text/css">
+.knitr .inline {
+  background-color: #f7f7f7;
+  border:solid 1px #B0B0B0;
+}
+.error {
+	font-weight: bold;
+	color: #FF0000;
+}
+.warning {
+	font-weight: bold;
+}
+.message {
+	font-style: italic;
+}
+.source, .output, .warning, .error, .message {
+	padding: 0 1em;
+  border:solid 1px #F7F7F7;
+}
+.source {
+  background-color: #f5f5f5;
+}
+.rimage .left {
+  text-align: left;
+}
+.rimage .right {
+  text-align: right;
+}
+.rimage .center {
+  text-align: center;
+}
+.hl.num {
+  color: #AF0F91;
+}
+.hl.str {
+  color: #317ECC;
+}
+.hl.com {
+  color: #AD95AF;
+  font-style: italic;
+}
+.hl.opt {
+  color: #000000;
+}
+.hl.std {
+  color: #585858;
+}
+.hl.kwa {
+  color: #295F94;
+  font-weight: bold;
+}
+.hl.kwb {
+  color: #B05A65;
+}
+.hl.kwc {
+  color: #55aa55;
+}
+.hl.kwd {
+  color: #BC5A65;
+  font-weight: bold;
+}
+</style>
+<title>Applied Predictive Modeling - Project</title>
+</head>
+
+<body>
+
+<p>The strategy to build these models where to identify zero variance columns and remove them from the initial Test and Training data sets.  However after initial models were built, accuracy on prediction was not desirable therefore varImp() was evaluated for gbm.  It was determined "X" was responsible for 100% of the prediction, which was obviously incorrect.  Upon further inspection X was only a consecutive index variable, therefore X was removed from the Test and Training data sets.  Final model accuracy for both gradient boosted machine and random forest models were greater than 99% accuracy.</p>
+
+<div class="chunk" id="unnamed-chunk-1"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">library</span><span class="hl std">(caret)</span>
+</pre></div>
+<div class="message"><pre class="knitr r">## Loading required package: lattice
+## Loading required package: ggplot2
+</pre></div>
+<div class="source"><pre class="knitr r"><span class="hl kwd">library</span><span class="hl std">(doMC)</span>
+</pre></div>
+<div class="message"><pre class="knitr r">## Loading required package: foreach
+## Loading required package: iterators
+## Loading required package: parallel
+</pre></div>
+</div></div>
+
+<p>Register cores for multithreaded model building.</p>
+<div class="chunk" id="unnamed-chunk-2"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">registerDoMC</span><span class="hl std">(</span><span class="hl kwc">cores</span> <span class="hl std">=</span> <span class="hl num">16</span><span class="hl std">)</span>
+</pre></div>
+</div></div>
+
+<p>Set see for reproducible results.</P>
+<div class="chunk" id="unnamed-chunk-3"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">set.seed</span><span class="hl std">(</span><span class="hl num">555</span><span class="hl std">)</span>
+</pre></div>
+</div></div>
+
+
+# Read in data
+<div class="chunk" id="unnamed-chunk-4"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">Test</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">read.csv</span><span class="hl std">(</span><span class="hl str">&quot;pml-testing.csv&quot;</span><span class="hl std">)</span>
+<span class="hl std">D</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">read.csv</span><span class="hl std">(</span><span class="hl str">&quot;pml-training.csv&quot;</span><span class="hl std">)</span>
+</pre></div>
+</div></div>
+
+<p>If column in Test set is all NA, remove from Test and Training(D) data frames.</p>
+<div class="chunk" id="unnamed-chunk-5"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">Test.missing</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">sapply</span><span class="hl std">(Test,</span> <span class="hl kwa">function</span><span class="hl std">(</span><span class="hl kwc">x</span><span class="hl std">)</span> <span class="hl kwd">all</span><span class="hl std">(</span><span class="hl kwd">is.na</span><span class="hl std">(x)) )</span>
+<span class="hl std">Test</span> <span class="hl kwb">&lt;-</span> <span class="hl std">Test[</span><span class="hl opt">!</span><span class="hl std">Test.missing]</span>
+<span class="hl std">D</span> <span class="hl kwb">&lt;-</span> <span class="hl std">D[</span><span class="hl opt">!</span><span class="hl std">Test.missing]</span>
+</pre></div>
+</div></div>
+
+<p>Remove variable X from Test and Training(D) datasets </p>
+<div class="chunk" id="unnamed-chunk-6"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">D</span> <span class="hl kwb">&lt;-</span> <span class="hl std">D[ ,</span> <span class="hl opt">-</span><span class="hl kwd">which</span><span class="hl std">(</span><span class="hl kwd">names</span><span class="hl std">(D)</span> <span class="hl opt">%in%</span> <span class="hl kwd">c</span><span class="hl std">(</span><span class="hl str">&quot;X&quot;</span><span class="hl std">)) ]</span>
+<span class="hl std">Test</span> <span class="hl kwb">&lt;-</span> <span class="hl std">Test[ ,</span> <span class="hl opt">-</span><span class="hl kwd">which</span><span class="hl std">(</span><span class="hl kwd">names</span><span class="hl std">(Test)</span> <span class="hl opt">%in%</span> <span class="hl kwd">c</span><span class="hl std">(</span><span class="hl str">&quot;X&quot;</span><span class="hl std">)) ]</span>
+</pre></div>
+</div></div>
+
+<p>Create stratified random sample.</p>
+<div class="chunk" id="unnamed-chunk-7"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">inTraining</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">createDataPartition</span><span class="hl std">(D</span><span class="hl opt">$</span><span class="hl std">classe,</span> <span class="hl kwc">p</span> <span class="hl std">=</span> <span class="hl num">.80</span><span class="hl std">,</span> <span class="hl kwc">list</span> <span class="hl std">=</span> <span class="hl num">FALSE</span><span class="hl std">)</span>
+<span class="hl std">D.Train</span> <span class="hl kwb">&lt;-</span> <span class="hl std">D[ inTraining, ]</span>
+<span class="hl std">D.Test</span>  <span class="hl kwb">&lt;-</span> <span class="hl std">D[</span><span class="hl opt">-</span><span class="hl std">inTraining, ]</span>
+</pre></div>
+</div></div>
+
+<p>5-fold Cross Validation repeated 3 times.</p>
+<div class="chunk" id="unnamed-chunk-8"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">fitControl</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">trainControl</span><span class="hl std">(</span>
+  <span class="hl kwc">method</span> <span class="hl std">=</span> <span class="hl str">&quot;repeatedcv&quot;</span><span class="hl std">,</span>
+  <span class="hl kwc">number</span> <span class="hl std">=</span> <span class="hl num">5</span><span class="hl std">,</span>
+  <span class="hl kwc">repeats</span> <span class="hl std">=</span> <span class="hl num">3</span><span class="hl std">)</span>
+</pre></div>
+</div></div>
+
+<p>Train gradient boosted machine model using 5 fold x3 cross validation.</p>
+<div class="chunk" id="unnamed-chunk-9"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">gbmFit1</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">train</span><span class="hl std">(classe</span> <span class="hl opt">~</span> <span class="hl std">.,</span> <span class="hl kwc">data</span> <span class="hl std">=</span> <span class="hl kwd">as.data.frame</span><span class="hl std">(D.Train),</span>
+                 <span class="hl kwc">method</span> <span class="hl std">=</span> <span class="hl str">&quot;gbm&quot;</span><span class="hl std">,</span>
+                 <span class="hl kwc">trControl</span> <span class="hl std">= fitControl,</span>
+                 <span class="hl kwc">verbose</span> <span class="hl std">=</span> <span class="hl num">TRUE</span><span class="hl std">)</span>
+</pre></div>
+<div class="message"><pre class="knitr r">## Loading required package: gbm
+## Loading required package: survival
+## Loading required package: splines
+## 
+## Attaching package: 'survival'
+## 
+## The following object is masked from 'package:caret':
+## 
+##     cluster
+## 
+## Loaded gbm 2.1.1
+## Loading required package: plyr
+</pre></div>
+<div class="output"><pre class="knitr r">## Iter   TrainDeviance   ValidDeviance   StepSize   Improve
+##      1        1.6094            -nan     0.1000    0.2467
+##      2        1.4489            -nan     0.1000    0.1839
+##      3        1.3334            -nan     0.1000    0.1526
+##      4        1.2375            -nan     0.1000    0.1151
+##      5        1.1622            -nan     0.1000    0.1165
+##      6        1.0884            -nan     0.1000    0.0922
+##      7        1.0300            -nan     0.1000    0.0826
+##      8        0.9775            -nan     0.1000    0.0809
+##      9        0.9272            -nan     0.1000    0.0570
+##     10        0.8911            -nan     0.1000    0.0655
+##     20        0.5804            -nan     0.1000    0.0374
+##     40        0.2941            -nan     0.1000    0.0145
+##     60        0.1645            -nan     0.1000    0.0087
+##     80        0.1016            -nan     0.1000    0.0030
+##    100        0.0660            -nan     0.1000    0.0014
+##    120        0.0461            -nan     0.1000    0.0009
+##    140        0.0342            -nan     0.1000    0.0007
+##    150        0.0298            -nan     0.1000    0.0006
+</pre></div>
+<div class="source"><pre class="knitr r"><span class="hl std">gbmFit1</span>
+</pre></div>
+<div class="output"><pre class="knitr r">## Stochastic Gradient Boosting 
+## 
+## 15699 samples
+##    58 predictors
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (5 fold, repeated 3 times) 
+## Summary of sample sizes: 12558, 12558, 12559, 12560, 12561, 12560, ... 
+## Resampling results across tuning parameters:
+## 
+##   interaction.depth  n.trees  Accuracy   Kappa      Accuracy SD 
+##   1                   50      0.8401178  0.7970771  0.0074731949
+##   1                  100      0.8991870  0.8723138  0.0054793631
+##   1                  150      0.9271079  0.9076596  0.0040261058
+##   2                   50      0.9573433  0.9459971  0.0032988693
+##   2                  100      0.9874726  0.9841538  0.0016579779
+##   2                  150      0.9921863  0.9901163  0.0012506720
+##   3                   50      0.9838206  0.9795339  0.0019757321
+##   3                  100      0.9934814  0.9917550  0.0013935116
+##   3                  150      0.9963904  0.9954343  0.0008314761
+##   Kappa SD   
+##   0.009470252
+##   0.006923553
+##   0.005097597
+##   0.004177556
+##   0.002098706
+##   0.001582808
+##   0.002497210
+##   0.001762479
+##   0.001051864
+## 
+## Tuning parameter 'shrinkage' was held constant at a value of 0.1
+## 
+## Tuning parameter 'n.minobsinnode' was held constant at a value of 10
+## Accuracy was used to select the optimal model using  the largest value.
+## The final values used for the model were n.trees = 150,
+##  interaction.depth = 3, shrinkage = 0.1 and n.minobsinnode = 10.
+</pre></div>
+</div></div>
+
+<p>Gradient Boosted Machine Model Accuracy</p>
+<div class="chunk" id="unnamed-chunk-10"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">plot</span><span class="hl std">(gbmFit1)</span>
+</pre></div>
+</div><div class="rimage default"><img src="figure/unnamed-chunk-10-1.png" title="plot of chunk unnamed-chunk-10" alt="plot of chunk unnamed-chunk-10" class="plot" /></div></div>
+
+<p>Train random forest model using 5 fold x3 cross validation.</p>
+<div class="chunk" id="unnamed-chunk-11"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">rfFit1</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">train</span><span class="hl std">(classe</span> <span class="hl opt">~</span> <span class="hl std">.,</span> <span class="hl kwc">data</span> <span class="hl std">=</span> <span class="hl kwd">as.data.frame</span><span class="hl std">(D.Train),</span>
+                <span class="hl kwc">method</span> <span class="hl std">=</span> <span class="hl str">&quot;rf&quot;</span><span class="hl std">,</span>
+                <span class="hl kwc">trControl</span> <span class="hl std">= fitControl,</span>
+                <span class="hl kwc">verbose</span> <span class="hl std">=</span> <span class="hl num">TRUE</span><span class="hl std">)</span>
+</pre></div>
+<div class="message"><pre class="knitr r">## Loading required package: randomForest
+## randomForest 4.6-12
+## Type rfNews() to see new features/changes/bug fixes.
+## 
+## Attaching package: 'randomForest'
+## 
+## The following object is masked from 'package:ggplot2':
+## 
+##     margin
+</pre></div>
+<div class="source"><pre class="knitr r"><span class="hl std">rfFit1</span>
+</pre></div>
+<div class="output"><pre class="knitr r">## Random Forest 
+## 
+## 15699 samples
+##    58 predictors
+##     5 classes: 'A', 'B', 'C', 'D', 'E' 
+## 
+## No pre-processing
+## Resampling: Cross-Validated (5 fold, repeated 3 times) 
+## Summary of sample sizes: 12560, 12558, 12557, 12560, 12561, 12560, ... 
+## Resampling results across tuning parameters:
+## 
+##   mtry  Accuracy   Kappa      Accuracy SD   Kappa SD    
+##    2    0.9898717  0.9871871  0.0022314147  0.0028233020
+##   41    0.9988534  0.9985497  0.0005621120  0.0007110093
+##   80    0.9981103  0.9976098  0.0008717739  0.0011026623
+## 
+## Accuracy was used to select the optimal model using  the largest value.
+## The final value used for the model was mtry = 41.
+</pre></div>
+</div></div>
+
+<p>Random Forest Model Accuracy</p>
+<div class="chunk" id="unnamed-chunk-12"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl kwd">plot</span><span class="hl std">(rfFit1)</span>
+</pre></div>
+</div><div class="rimage default"><img src="figure/unnamed-chunk-12-1.png" title="plot of chunk unnamed-chunk-12" alt="plot of chunk unnamed-chunk-12" class="plot" /></div></div>
+
+
+<p>Make predictions using each gbm and rf models.</p>
+<div class="chunk" id="unnamed-chunk-13"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">gbm.predict</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">predict</span><span class="hl std">(gbmFit1,</span> <span class="hl kwc">newdata</span> <span class="hl std">= D.Test)</span>
+<span class="hl std">rf.predict</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">predict</span><span class="hl std">(rfFit1,</span> <span class="hl kwc">newdata</span> <span class="hl std">= D.Test)</span>
+</pre></div>
+</div></div>
+
+<p>Build confusion matrices from models.</p>
+<div class="chunk" id="unnamed-chunk-14"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">gbm.cm</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">confusionMatrix</span><span class="hl std">(gbm.predict, D.Test</span><span class="hl opt">$</span><span class="hl std">classe)</span>
+<span class="hl std">rf.cm</span> <span class="hl kwb">&lt;-</span> <span class="hl kwd">confusionMatrix</span><span class="hl std">(rf.predict, D.Test</span><span class="hl opt">$</span><span class="hl std">classe)</span>
+</pre></div>
+</div></div>
+
+<p>Evaluate accuracy for each model extracted from confusion matrices.</p>
+<div class="chunk" id="unnamed-chunk-15"><div class="rcode"><div class="source"><pre class="knitr r"><span class="hl std">gbm.cm</span><span class="hl opt">$</span><span class="hl std">overall[</span><span class="hl str">'Accuracy'</span><span class="hl std">]</span>
+</pre></div>
+<div class="output"><pre class="knitr r">##  Accuracy 
+## 0.9959215
+</pre></div>
+<div class="source"><pre class="knitr r"><span class="hl std">rf.cm</span><span class="hl opt">$</span><span class="hl std">overall[</span><span class="hl str">'Accuracy'</span><span class="hl std">]</span>
+</pre></div>
+<div class="output"><pre class="knitr r">##  Accuracy 
+## 0.9984706
+</pre></div>
+</div></div>
+
+</body>
+</html>
