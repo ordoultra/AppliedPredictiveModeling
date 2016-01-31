@@ -1,14 +1,11 @@
+# Applied Predictive Modeling - Project
+
 ---
 title: "MLProject.Rmd"
 output: html_document
 ---
 
 The strategy to build these models where to identify zero variance columns and remove them from the initial Test and Training data sets.  However after initial models were built, accuracy on prediction was not desirable therefore varImp() was evaluated for gbm.  It was determined "X" was responsible for 100% of the prediction, which was obviously incorrect.  Upon further inspection X was only a consecutive index variable, therefore X was removed from the Test and Training data sets.  Final model accuracy for both gradient boosted machine and random forest models were greater than 99% accuracy.
-
-```{r}
-library(caret)
-library(doMC)
-```
 
 ```{r}
 library(caret)
@@ -26,7 +23,7 @@ set.seed(555)
 ```
 
 
-# Read in data
+## Read in data
 ```{r}
 Test <- read.csv("pml-testing.csv")
 D <- read.csv("pml-training.csv")
@@ -60,8 +57,9 @@ fitControl <- trainControl(
   repeats = 3)
 ```
 
+## Train Models
 <p>Train gradient boosted machine model using 5 fold x3 cross validation.</p>
-```{r}
+```{r, cache=TRUE}
 gbmFit1 <- train(classe ~ ., data = as.data.frame(D.Train),
                  method = "gbm",
                  trControl = fitControl,
@@ -71,12 +69,12 @@ gbmFit1
 ```
 
 <p>Gradient Boosted Machine Model Accuracy</p>
-```{r} fig.width=7, fig.height=6
+```{r} 
 plot(gbmFit1)
 ```
 
 <p>Train random forest model using 5 fold x3 cross validation.</p>
-```{r}
+```{r, cache=TRUE}
 rfFit1 <- train(classe ~ ., data = as.data.frame(D.Train),
                 method = "rf",
                 trControl = fitControl,
@@ -86,17 +84,18 @@ rfFit1
 ```
 
 <p>Random Forest Model Accuracy</p>
-```{r} fig.width=7, fig.height=6
+```{r} 
 plot(rfFit1)
 ```
 
-
+## Make Predictions
 <p>Make predictions using each gbm and rf models.</p>
 ```{r}
 gbm.predict <- predict(gbmFit1, newdata = D.Test)
 rf.predict <- predict(rfFit1, newdata = D.Test)
 ```
 
+#Evaluate Accuracy
 <p>Build confusion matrices from models.</p>
 ```{r}
 gbm.cm <- confusionMatrix(gbm.predict, D.Test$classe)
